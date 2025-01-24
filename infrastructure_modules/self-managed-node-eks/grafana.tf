@@ -184,7 +184,7 @@ resource "helm_release" "grafana" {
 
   set {
     name  = "grafana\\.ini.auth.disable_login_form"
-    value = "true"
+    value = "true" 
   }
 
   set {

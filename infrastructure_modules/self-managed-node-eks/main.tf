@@ -153,6 +153,14 @@ module "eks" {
         type                     = "ingress"
         source_security_group_id = var.lb_security_group_id
       }
+      from_vpc_http_port = {
+        description              = "Node HTTP from VPC"
+        protocol                 = "TCP"
+        from_port                = local.lb_target_group_http_port
+        to_port                  = local.lb_target_group_http_port
+        type                     = "ingress"
+        source_security_group_id = var.lb_security_group_id
+      }
       bastion_ssh = {
         description              = "Bastion SSH"
         protocol                 = "TCP"

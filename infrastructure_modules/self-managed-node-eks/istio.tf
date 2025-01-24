@@ -6,7 +6,7 @@ locals {
   ##############################################
   lb_ssl_policy               = "ELBSecurityPolicy-2016-08"
   lb_target_group_status_port = 30021
-  # lb_target_group_http_port   = 30080
+  lb_target_group_http_port   = 30080
   lb_target_group_https_port = 30443
 
   ##############################################
@@ -95,13 +95,23 @@ resource "aws_lb" "ingress" {
   }
 }
 
-# resource "aws_lb_target_group" "http" {
-#   name              = format("%s-http", var.cluster_name)
-#   port              = local.lb_target_group_http_port
-#   protocol          = "TCP"
-#   vpc_id            = var.vpc_id
-#   proxy_protocol_v2 = var.proxy_protocol_v2
-# }
+resource "aws_lb_target_group" "http" {
+  name              = format("%s-http", var.cluster_name)
+  port              = local.lb_target_group_http_port
+  protocol          = "HTTP"
+  vpc_id            = var.vpc_id
+  proxy_protocol_v2 = var.proxy_protocol_v2
+
+  health_check {
+    protocol            = "HTTP"
+    port                = local.lb_target_group_status_port
+    path                = "/healthz/ready"
+    interval            = 30
+    timeout             = 5
+    healthy_threshold   = 3
+    unhealthy_threshold = 3
+  }
+}
 
 resource "aws_lb_target_group" "https" {
   name              = format("%s-https", var.cluster_name)
@@ -110,16 +120,16 @@ resource "aws_lb_target_group" "https" {
   vpc_id            = var.vpc_id
   proxy_protocol_v2 = var.proxy_protocol_v2
 
-  health_check {
-    enabled             = true
-    interval            = 30
-    matcher             = "200"
-    path                = "/health/ready"
-    port                = local.lb_target_group_status_port
-    protocol            = "HTTPS"
-    healthy_threshold   = 3
-    unhealthy_threshold = 3
-  }
+  # health_check {
+  #   enabled             = true
+  #   interval            = 30
+  #   matcher             = "200"
+  #   path                = "/health/ready"
+  #   port                = local.lb_target_group_status_port
+  #   protocol            = "HTTPS"
+  #   healthy_threshold   = 3
+  #   unhealthy_threshold = 3
+  # }
 }
 
 resource "aws_lb_listener" "ingress_443" {
@@ -131,7 +141,8 @@ resource "aws_lb_listener" "ingress_443" {
 
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.https.arn
+    # target_group_arn = aws_lb_target_group.https.arn
+    target_group_arn = aws_lb_target_group.http.arn
   }
 }
 
@@ -146,6 +157,9 @@ resource "aws_lb_listener" "ingress_80" {
       protocol    = "HTTPS"
       status_code = "HTTP_301"
     }
+
+    # type             = "forward"
+    # target_group_arn = aws_lb_target_group.http.arn
   }
 }
 
@@ -442,36 +456,36 @@ resource "helm_release" "istiod" {
 ##############################################
 # Istio Ingress Cert
 ##############################################
-resource "kubectl_manifest" "istio_cert" {
-  yaml_body = <<YAML
-apiVersion: cert-manager.io/v1
-kind: Certificate
-metadata:
-  name: ${local.cert_secret_name}
-  namespace: istio-system
-spec:
-  secretName: ${local.cert_secret_name}
-  issuerRef:
-    kind: ClusterIssuer
-    name: letsencrypt-issuer
-  commonName: "*.${var.public_root_domain_name}"
-  dnsNames:
-  - "*.${var.public_root_domain_name}"
-  - "${var.public_root_domain_name}"
-  acme:
-    config:
-    - dns01:
-        provider: aws-route53
-      domains:
-      - "*.${var.public_root_domain_name}"
-      - "${var.public_root_domain_name}"
-YAML
+# resource "kubectl_manifest" "istio_cert" {
+#   yaml_body = <<YAML
+# apiVersion: cert-manager.io/v1
+# kind: Certificate
+# metadata:
+#   name: ${local.cert_secret_name}
+#   namespace: istio-system
+# spec:
+#   secretName: ${local.cert_secret_name}
+#   issuerRef:
+#     kind: ClusterIssuer
+#     name: letsencrypt-issuer
+#   commonName: "*.${var.public_root_domain_name}"
+#   dnsNames:
+#   - "*.${var.public_root_domain_name}"
+#   - "${var.public_root_domain_name}"
+#   acme:
+#     config:
+#     - dns01:
+#         provider: aws-route53
+#       domains:
+#       - "*.${var.public_root_domain_name}"
+#       - "${var.public_root_domain_name}"
+# YAML
 
-  depends_on = [
-    module.eks,
-    kubectl_manifest.cluster_issuer
-  ]
-}
+#   depends_on = [
+#     module.eks,
+#     kubectl_manifest.cluster_issuer
+#   ]
+# }
 
 ##############################################
 # Istio Ingress
@@ -503,22 +517,22 @@ resource "helm_release" "istio_ingress" {
 
   set {
     name  = "resources.requests.cpu"
-    value = "1.5"
+    value = "3.0"
   }
 
   set {
     name  = "resources.requests.memory"
-    value = "2Gi"
+    value = "10Gi"
   }
 
   set {
     name  = "resources.limits.cpu"
-    value = "1.5"
+    value = "3.0"
   }
 
   set {
     name  = "resources.limits.memory"
-    value = "2Gi"
+    value = "10Gi"
   }
 
   set {
@@ -546,55 +560,55 @@ resource "helm_release" "istio_ingress" {
     value = "TCP"
   }
 
-  # set {
-  #   name  = "service.ports[1].name"
-  #   value = "http2"
-  # }
-
-  # set {
-  #   name  = "service.ports[1].port"
-  #   value = 80
-  # }
-
-  # set {
-  #   name  = "service.ports[1].targetPort"
-  #   value = 80
-  # }
-
-  # set {
-  #   name  = "service.ports[1].nodePort"
-  #   value = local.lb_target_group_http_port
-  # }
-
-  # set {
-  #   name  = "service.ports[1].protocol"
-  #   value = "TCP"
-  # }
-
   set {
     name  = "service.ports[1].name"
-    value = "https"
+    value = "http2"
   }
 
   set {
     name  = "service.ports[1].port"
-    value = 443
+    value = 80
   }
 
   set {
     name  = "service.ports[1].targetPort"
-    value = 443
+    value = 80
   }
 
   set {
     name  = "service.ports[1].nodePort"
-    value = local.lb_target_group_https_port
+    value = local.lb_target_group_http_port
   }
 
   set {
     name  = "service.ports[1].protocol"
     value = "TCP"
   }
+
+  # set {
+  #   name  = "service.ports[1].name"
+  #   value = "https"
+  # }
+
+  # set {
+  #   name  = "service.ports[1].port"
+  #   value = 443
+  # }
+
+  # set {
+  #   name  = "service.ports[1].targetPort"
+  #   value = 443
+  # }
+
+  # set {
+  #   name  = "service.ports[1].nodePort"
+  #   value = local.lb_target_group_https_port
+  # }
+
+  # set {
+  #   name  = "service.ports[1].protocol"
+  #   value = "TCP"
+  # }
 
   depends_on = [
     module.eks,
@@ -603,18 +617,42 @@ resource "helm_release" "istio_ingress" {
   ]
 }
 
-resource "kubectl_manifest" "istio_target_group_binding_https" {
+# resource "kubectl_manifest" "istio_target_group_binding_https" {
+#   yaml_body = <<YAML
+# apiVersion: elbv2.k8s.aws/v1beta1
+# kind: TargetGroupBinding
+# metadata:
+#   name: istio-ingress-https
+#   namespace: ${local.istio_namespace}
+# spec:
+#   serviceRef:
+#     name: istio-ingressgateway
+#     port: https
+#   targetGroupARN: ${aws_lb_target_group.https.arn}
+# YAML
+
+#   depends_on = [
+#     module.eks,
+#     helm_release.istio_base,
+#     helm_release.istiod
+#   ]
+# }
+
+resource "kubectl_manifest" "istio_target_group_binding_http" {
   yaml_body = <<YAML
 apiVersion: elbv2.k8s.aws/v1beta1
 kind: TargetGroupBinding
 metadata:
-  name: istio-ingress-https
+  name: istio-ingress-http
+  # name: istio-ingress-https
   namespace: ${local.istio_namespace}
 spec:
   serviceRef:
     name: istio-ingressgateway
-    port: https
-  targetGroupARN: ${aws_lb_target_group.https.arn}
+    port: http2
+    # port: https
+  # targetGroupARN: ${aws_lb_target_group.https.arn}
+  targetGroupARN: ${aws_lb_target_group.http.arn}
 YAML
 
   depends_on = [
@@ -879,12 +917,15 @@ spec:
     istio: ingressgateway
   servers:
     - port:
-        number: 443
-        protocol: HTTPS
-        name: https
-      tls:
-        mode: SIMPLE
-        credentialName: ${local.cert_secret_name}
+        # number: 443
+        # protocol: HTTPS
+        # name: https
+        number: 80
+        protocol: HTTP
+        name: http
+      # tls:
+      #   mode: SIMPLE
+      #   credentialName: ${local.cert_secret_name}
       hosts:
         - "*"
 YAML
@@ -893,7 +934,7 @@ YAML
     module.eks,
     helm_release.istio_base,
     helm_release.istiod,
-    kubectl_manifest.istio_cert
+    # kubectl_manifest.istio_cert
   ]
 }
 

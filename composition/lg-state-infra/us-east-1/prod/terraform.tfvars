@@ -128,6 +128,7 @@ node_groups = [
     name                     = "db-common"
     ami_type                 = "AL2023_ARM_64_STANDARD"
     use_mixed_instances_policy = true
+    availability_zones       = ["us-east-1a"]
     instance_type            = "c8g.12xlarge"
     mixed_instances_policy = {
       instances_distribution = {
@@ -189,7 +190,7 @@ node_groups = [
     name                     = "web-gateway"
     ami_type                 = "AL2023_ARM_64_STANDARD"
     use_mixed_instances_policy = true
-    instance_type            = "m8g.xlarge"
+    instance_type            = "m8g.2xlarge"
     mixed_instances_policy = {
       instances_distribution = {
         on_demand_allocation_strategy            = "prioritized"
@@ -284,7 +285,7 @@ node_groups = [
     name                     = "other"
     ami_type                 = "AL2023_ARM_64_STANDARD"
     use_mixed_instances_policy = true
-    instance_type            = "t4g.2xlarge"
+    instance_type            = "m8g.4xlarge"
     mixed_instances_policy = {
       instances_distribution = {
         on_demand_allocation_strategy            = "prioritized"
@@ -364,8 +365,8 @@ cluster_private_zone    = "eks.local"
 # Istio
 ##############################################
 istio_version              = "1.23.2"
-istio_ingress_min_pods     = 2
-istio_ingress_max_pods     = 5
+istio_ingress_min_pods     = 4
+istio_ingress_max_pods     = 4
 kiail_version              = "1.89.7"
 kiali_virtual_service_host = "kiali.state.api.cresplanex.org"
 ##############################################
